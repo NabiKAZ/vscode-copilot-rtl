@@ -6,7 +6,7 @@ A simple script to enable **Right-to-Left (RTL)** support for the GitHub Copilot
 
 - Applies RTL direction to the chat interface
 - Right-aligns input text for better readability
-- Uses the Persian-friendly [Vazir font](https://github.com/rastikerdar/vazir-font)
+- Uses the Persian-friendly [Vazirmatn font](https://github.com/rastikerdar/vazirmatn)
 - Preserves LTR direction for code blocks
 - Clean and minimal styling for better UX
 
@@ -36,11 +36,11 @@ Here is an example of the result after applying the script:
 
 - The effect is temporary and will reset when you reload or reopen VSCode.
 - You can repeat the same process each time you want to apply the RTL styling.
-- Make sure the [Vazir font](https://github.com/rastikerdar/vazir-font) is installed on your system for best results.
+- Make sure the [Vazirmatn font](https://github.com/rastikerdar/vazirmatn) is installed on your system for best results.
 
 ## To-Do & Improvements
 
-- [ ] Fix issue where LTR blocks sometimes disappear
+- [x] Fix issue where LTR blocks sometimes disappear
 - [ ] Improve RTL support for the question input area
 - [ ] Add toggle to switch between RTL and LTR
 - [ ] Convert script into a standalone VSCode extension
