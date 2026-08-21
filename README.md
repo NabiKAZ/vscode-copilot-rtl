@@ -41,7 +41,7 @@ Here is an example of the result after applying the script:
 ## To-Do & Improvements
 
 - [x] Fix issue where LTR blocks sometimes disappear
-- [ ] Improve RTL support for the question input area
+- [x] Improve RTL support for the question input area
 - [ ] Add toggle to switch between RTL and LTR
 - [ ] Convert script into a standalone VSCode extension
 
