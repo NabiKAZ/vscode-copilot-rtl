@@ -2,8 +2,12 @@
  * This script modifies the styling of various elements in a web page to support RTL (Right-to-Left) text direction
  * It applies RTL direction, Vazirmatn font family, and specific font sizes to interactive elements
  * Code blocks and result editors remain LTR (Left-to-Right) for proper code display
- * https://github.com/NabiKAZ/vscode-copilot-rtl
- * https://x.com/NabiKAZ
+ * 
+ * @version 1.0.0
+ * @author  NabiKAZ
+ * @license GPLv3
+ * @see https://github.com/NabiKAZ/vscode-copilot-rtl
+ * @see https://x.com/NabiKAZ
  */
 // Create CSS rules for RTL support
 const css = `
