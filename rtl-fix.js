@@ -1,17 +1,21 @@
 /**
  * This script modifies the styling of various elements in a web page to support RTL (Right-to-Left) text direction.
- * It applies RTL direction, Vazirmatn font family, and specific font sizes to interactive elements.
+ * It applies a configurable direction, font family, and font size to the chat area.
  * Code blocks and result editors remain LTR (Left-to-Right) for proper code display.
  *
- * Part 1: Chat area (rendered markdown + question carousel) -> forced RTL styling via CSS.
+ * Part 1: Chat area (rendered markdown + question carousel) -> forced direction/font via CSS.
  * Part 2: Prompt input box (Monaco editor) -> per-line auto direction detection (RTL/LTR)
- *         based on the first non-space character of each line.
+ *         based on the first non-space character of each line, independent of Part 1's setting.
  *
  * This file is injected into VS Code's workbench window by extension.js — it is not
  * loaded as a normal extension script, so it has no access to the `vscode` API and
  * runs directly against the workbench DOM, exactly like pasting it into DevTools.
  *
- * @version 2.0.0
+ * The three constants below are rewritten by extension.js to match the user's
+ * `copilotRtl.*` settings every time it syncs this file. Pasted standalone (see
+ * README's "Manual usage" section) they simply keep these defaults.
+ *
+ * @version 2.1.0
  * @author  NabiKAZ
  * @license GPLv3
  * @see https://github.com/NabiKAZ/vscode-copilot-rtl
@@ -20,13 +24,22 @@
 (function () {
   'use strict';
 
+  // Rewritten by extension.js to match copilotRtl.direction / fontFamily / fontSize.
+  const DIRECTION = 'rtl';
+  const FONT_FAMILY = 'Vazirmatn';
+  const FONT_SIZE = 13;
+
+  // Fixed location extension.js copies the bundled fallback font to, next to
+  // workbench.html. Used as a fallback only — see the @font-face rule below.
+  const BUNDLED_FONT_PATH = './copilot-rtl-assets/Vazirmatn-Variable.woff2';
+
   // Avoid double-injection if the workbench reloads without a full patch reapply
   if (window.__copilotRtlPatched) return;
   window.__copilotRtlPatched = true;
 
   // Log once so it's easy to confirm the script actually ran (visible in
   // Help > Toggle Developer Tools > Console).
-  console.log('[copilot-rtl] script loaded');
+  console.log('[copilot-rtl] script loaded', { DIRECTION, FONT_FAMILY, FONT_SIZE });
 
   // Small helper to inject a <style> tag into <head>
   function injectStyle(css) {
@@ -37,15 +50,26 @@
   }
 
   // -----------------------------------------------------------------------
-  // Part 1: Chat area — force RTL direction, Vazirmatn font, and font size
+  // Part 1: Chat area — force direction, font family, and font size
   // -----------------------------------------------------------------------
   injectStyle(`
+    /* Fallback so "Vazirmatn" still renders even when it isn't installed
+       on the system: local() checks the system font first, url() is the
+       copy bundled with the extension (unused for the DevTools/manual path,
+       where the relative asset simply won't exist and this rule is skipped). */
+    @font-face {
+      font-family: 'Vazirmatn';
+      src: local('Vazirmatn'), local('Vazirmatn Variable'), url('${BUNDLED_FONT_PATH}') format('woff2');
+      font-weight: 100 900;
+      font-display: swap;
+    }
+
     /* COPILOT RTL PATCH */
     .rendered-markdown > *:not(div),
     .chat-question-carousel-widget-container {
-      direction: rtl !important;
-      font-family: Vazirmatn !important;
-      font-size: 13px !important;
+      direction: ${DIRECTION} !important;
+      font-family: "${FONT_FAMILY}", 'Vazirmatn', sans-serif !important;
+      font-size: ${FONT_SIZE}px !important;
     }
   `);
 

@@ -2,7 +2,7 @@
   "name": "copilot-rtl",
   "displayName": "Copilot Chat RTL Support",
   "description": "Adds Right-to-Left (RTL) support and Vazirmatn font styling to the GitHub Copilot Chat panel, for Persian/Farsi, Arabic, Hebrew and other RTL languages.",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "publisher": "NabiKAZ",
   "license": "GPL-3.0-only",
   "engines": {
@@ -48,6 +48,10 @@
       {
         "command": "copilotRtl.reapply",
         "title": "Copilot RTL: Re-apply Patch (after a VS Code update)"
+      },
+      {
+        "command": "copilotRtl.openMenu",
+        "title": "Copilot RTL: Open Menu (direction, font, size…)"
       }
     ],
     "configuration": {
@@ -57,6 +61,28 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically (re)apply the RTL patch to VS Code's workbench on startup."
+        },
+        "copilotRtl.direction": {
+          "type": "string",
+          "enum": ["rtl", "ltr"],
+          "enumDescriptions": [
+            "Force right-to-left direction in the chat area",
+            "Force left-to-right direction in the chat area"
+          ],
+          "default": "rtl",
+          "description": "Text direction forced on the Copilot Chat area. The prompt input box always auto-detects direction per line, regardless of this setting."
+        },
+        "copilotRtl.fontFamily": {
+          "type": "string",
+          "default": "Vazirmatn",
+          "description": "Font family used in the Copilot Chat area. If the font isn't installed, this falls back to Vazirmatn (using the copy bundled with the extension if Vazirmatn isn't installed either)."
+        },
+        "copilotRtl.fontSize": {
+          "type": "number",
+          "default": 13,
+          "minimum": 8,
+          "maximum": 48,
+          "description": "Font size (in pixels) used in the Copilot Chat area."
         }
       }
     }

@@ -9,9 +9,12 @@ VS Code extensions normally can't touch the main workbench UI (only webviews). T
 Two things are worth knowing, because `workbench.html` and `product.json` are shared files that other extensions using the same technique may also be editing:
 
 - **The RTL logic lives in its own file.** `workbench.html` only gets a single `<script src="./copilot-rtl-fix.js">` reference (workbench's CSP blocks inline scripts entirely — only `'self'` sources are allowed). The extension refreshes that external file's contents on every startup, so future logic updates take effect after a normal window reload, with **no need to touch `workbench.html` again**.
+- **Settings are baked into the synced script, not read at runtime.** `rtl-fix.js` runs inside the workbench window with no access to the `vscode` API, so it can't call `vscode.workspace.getConfiguration` itself. Instead, the copy of `rtl-fix.js` shipped in the extension is a template: it declares `const DIRECTION = 'rtl'`, `const FONT_FAMILY = 'Vazirmatn'`, `const FONT_SIZE = 13` near the top. Every time the extension syncs the script (on activation, and whenever a `copilotRtl.*` setting changes), it rewrites those three lines — via a targeted regex, not a placeholder token — to match current settings, and writes the result next to `workbench.html`. A reload is still needed for the new copy to be loaded.
+- **The bundled font is a fallback, not a replacement.** `fonts/Vazirmatn-Variable.woff2` (the OFL-licensed variable font from the [`vazirmatn`](https://www.npmjs.com/package/vazirmatn) npm package) is copied once to `copilot-rtl-assets/` next to `workbench.html`. The injected CSS declares `@font-face { font-family: 'Vazirmatn'; src: local('Vazirmatn'), local('Vazirmatn Variable'), url('./copilot-rtl-assets/Vazirmatn-Variable.woff2') format('woff2'); }` — the browser tries the system-installed font first via `local()`, and only loads the bundled file if that lookup fails. Whatever `fontFamily` the user picks is placed ahead of `'Vazirmatn'` in the CSS `font-family` stack, so any custom font also falls back to (system or bundled) Vazirmatn before a generic `sans-serif`.
 - **Disabling never restores a whole-file backup.** If it did, and some other extension had patched `workbench.html` or `product.json` in the meantime, that extension's changes would be silently erased. Instead:
   - In `workbench.html`, only the exact block we injected (marked by HTML comments) is located and cut out — everything else in the file is left untouched.
   - In `product.json`, only the single checksum entry we removed is merged back in — the rest of the file, including changes made by other tools, is left as-is.
+  - The copied script and font asset are deleted directly (they're wholly ours, so no merge concerns there).
   - Full-file `.copilot-rtl-bak` backups are still written next to both files as a manual/emergency recovery option, but the **Disable** command does not use them automatically.
 
 Because this modifies files inside the VS Code installation folder, it is **unsupported by Microsoft**, and a few side effects are expected:
@@ -51,3 +54,5 @@ vsce publish   # publishes the current version to the Marketplace
 ```
 
 You'll need a Marketplace publisher account (`NabiKAZ`) and an Azure DevOps Personal Access Token with **Marketplace: Manage** scope. See the [official publishing guide](https://code.visualstudio.com/api/working-with-extensions/publishing-extension) for details. Don't forget to add a real `icon.png` (128×128) before packaging — `package.json` already references it.
+
+`fonts/Vazirmatn-Variable.woff2` is redistributed under the SIL Open Font License 1.1; its license text is bundled at `fonts/OFL.txt` and must ship with any package containing the font.

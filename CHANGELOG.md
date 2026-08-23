@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.0
+
+- Adds `copilotRtl.direction`, `copilotRtl.fontFamily`, and `copilotRtl.fontSize`
+  settings; a status bar item opens a quick menu to change any of them without
+  going through Settings.
+- Bundles the Vazirmatn font so it's used automatically as a fallback when it
+  isn't installed on the system, whatever font family is chosen.
+
 ## 2.0.0
 
 - Initial extension release, packaging the original DevTools console script.
