@@ -25,7 +25,7 @@
  * also the right thing to run after a VS Code update reverts the patch —
  * one clearly-named action instead of two overlapping ones.
  *
- * @version 2.2.1
+ * @version 2.3.0
  * @author  NabiKAZ
  * @license GPLv3
  * @see https://github.com/NabiKAZ/vscode-copilot-rtl
@@ -35,6 +35,7 @@
 
 const vscode = require('vscode');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 const MARKER_START = '<!-- COPILOT-RTL-PATCH:START -->';
@@ -46,6 +47,7 @@ const BUNDLED_FONT_FILE_NAME = 'Vazirmatn-Variable.woff2';
 
 const CONFIG_SECTION = 'copilotRtl';
 const CONFIG_KEYS = ['direction', 'fontFamily', 'fontSize', 'lineHeight'];
+const DIRECTION_CYCLE = ['auto', 'rtl', 'ltr'];
 
 // Known relative locations of the workbench HTML across VS Code versions/variants.
 const WORKBENCH_HTML_CANDIDATES = [
@@ -107,7 +109,7 @@ function stripPatchBlocks(html) {
 function readConfig() {
   const cfg = vscode.workspace.getConfiguration(CONFIG_SECTION);
   return {
-    direction: cfg.get('direction', 'rtl'),
+    direction: cfg.get('direction', 'auto'),
     fontFamily: cfg.get('fontFamily', 'Vazirmatn'),
     fontSize: cfg.get('fontSize', 13),
     lineHeight: cfg.get('lineHeight', 1.6),
@@ -311,6 +313,53 @@ function forceEnable(context) {
   return applyPatch(context);
 }
 
+// ---------------------------------------------------------------------------
+// Detecting a patch a VS Code update reverted
+// ---------------------------------------------------------------------------
+
+const PATCH_STATE_KEY = 'copilotRtl.patchApplied';
+
+function rememberPatchState(context, applied) {
+  context.globalState.update(PATCH_STATE_KEY, applied);
+}
+
+/**
+ * True when we previously applied the patch but workbench.html no longer
+ * contains it — which in practice means a VS Code update replaced the file.
+ */
+function wasPatchReverted(context) {
+  if (!context.globalState.get(PATCH_STATE_KEY, false)) return false;
+  try {
+    const { htmlPath } = locateWorkbench();
+    return !isPatched(readFile(htmlPath));
+  } catch {
+    return false;
+  }
+}
+
+/** Used when autoEnable is off: tell the user instead of silently doing nothing. */
+async function notifyIfPatchReverted(context) {
+  const notify = vscode.workspace
+    .getConfiguration(CONFIG_SECTION)
+    .get('notifyWhenPatchReverted', true);
+  if (!notify || !wasPatchReverted(context)) return;
+
+  const choice = await vscode.window.showWarningMessage(
+    'Copilot RTL is no longer active — a VS Code update likely overwrote the patch.',
+    'Re-apply Now',
+    'Not Now',
+    "Don't Show Again"
+  );
+
+  if (choice === 'Re-apply Now') {
+    vscode.commands.executeCommand('copilotRtl.enable');
+  } else if (choice === "Don't Show Again") {
+    await vscode.workspace
+      .getConfiguration(CONFIG_SECTION)
+      .update('notifyWhenPatchReverted', false, vscode.ConfigurationTarget.Global);
+  }
+}
+
 async function offerReload(message) {
   const choice = await vscode.window.showInformationMessage(
     message,
@@ -338,15 +387,104 @@ function withErrorHandling(fn) {
 }
 
 // ---------------------------------------------------------------------------
+// Installed fonts
+// ---------------------------------------------------------------------------
+
+const FONT_EXTENSIONS = new Set(['.ttf', '.otf', '.ttc', '.woff', '.woff2']);
+const FONT_SCAN_MAX_DEPTH = 3;
+
+// Style/weight suffixes that are part of a file name but not of the family
+// name, e.g. "Vazirmatn-Bold.ttf" -> "Vazirmatn".
+const FONT_STYLE_SUFFIX_REGEX =
+  /[-_ ]?(variable|var|vf|thin|extra ?light|ultra ?light|light|regular|normal|book|medium|semi ?bold|demi ?bold|bold|extra ?bold|ultra ?bold|black|heavy|italic|oblique|condensed|expanded|roman|\d{3})$/i;
+
+function systemFontDirectories() {
+  const home = os.homedir();
+  const dirs = [];
+
+  if (process.platform === 'win32') {
+    dirs.push(path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts'));
+    if (process.env.LOCALAPPDATA) {
+      dirs.push(path.join(process.env.LOCALAPPDATA, 'Microsoft', 'Windows', 'Fonts'));
+    }
+  } else if (process.platform === 'darwin') {
+    dirs.push('/System/Library/Fonts', '/Library/Fonts', path.join(home, 'Library', 'Fonts'));
+  } else {
+    dirs.push(
+      '/usr/share/fonts',
+      '/usr/local/share/fonts',
+      path.join(home, '.fonts'),
+      path.join(home, '.local', 'share', 'fonts')
+    );
+  }
+
+  return dirs;
+}
+
+/** Family name guessed from a font file name — no native dependency needed. */
+function familyNameFromFileName(fileName) {
+  let name = path.basename(fileName, path.extname(fileName));
+  name = name.replace(/[_]+/g, ' ');
+  // Split CamelCase runs ("VazirmatnBold" -> "Vazirmatn Bold") so the suffix
+  // stripping below can see the style part.
+  name = name.replace(/([a-z\d])([A-Z])/g, '$1 $2').trim();
+  let previous;
+  do {
+    previous = name;
+    name = name.replace(FONT_STYLE_SUFFIX_REGEX, '').trim();
+  } while (name !== previous);
+  return name.replace(/[-\s]+$/, '').trim();
+}
+
+async function collectFontFiles(dir, depth, out) {
+  let entries;
+  try {
+    entries = await fs.promises.readdir(dir, { withFileTypes: true });
+  } catch {
+    return; // unreadable/missing directory is not an error here
+  }
+
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (depth < FONT_SCAN_MAX_DEPTH) await collectFontFiles(full, depth + 1, out);
+    } else if (FONT_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+      out.push(entry.name);
+    }
+  }
+}
+
+/**
+ * Names of fonts installed on this machine, derived from the files in the
+ * platform's font directories. Best-effort: an empty list just means the user
+ * types the name by hand instead.
+ */
+async function listSystemFonts() {
+  const files = [];
+  await Promise.all(systemFontDirectories().map((dir) => collectFontFiles(dir, 0, files)));
+
+  const families = new Set(['Vazirmatn']); // always offer the bundled fallback
+  for (const file of files) {
+    const family = familyNameFromFileName(file);
+    if (family) families.add(family);
+  }
+
+  return [...families].sort((a, b) => a.localeCompare(b));
+}
+
+// ---------------------------------------------------------------------------
 // Status bar menu
 // ---------------------------------------------------------------------------
 
 let statusBarItem;
 
+const DIRECTION_ICONS = { auto: '$(arrow-swap)', rtl: '$(arrow-left)', ltr: '$(arrow-right)' };
+
 function updateStatusBarItem() {
   if (!statusBarItem) return;
   const config = readConfig();
-  statusBarItem.text = `$(arrow-swap) ${config.direction.toUpperCase()}`;
+  const icon = DIRECTION_ICONS[config.direction] || '$(arrow-swap)';
+  statusBarItem.text = `${icon} ${config.direction.toUpperCase()}`;
   statusBarItem.tooltip = `Copilot RTL — direction: ${config.direction}, font: ${config.fontFamily} ${config.fontSize}px, line height: ${config.lineHeight} (click for options)`;
 }
 
@@ -358,20 +496,70 @@ function createStatusBarItem() {
   return statusBarItem;
 }
 
+/** Step through auto → rtl → ltr → auto. Bound to a keybinding for quick toggling. */
+async function cycleDirection() {
+  const cfg = vscode.workspace.getConfiguration(CONFIG_SECTION);
+  const current = readConfig().direction;
+  const next = DIRECTION_CYCLE[(DIRECTION_CYCLE.indexOf(current) + 1) % DIRECTION_CYCLE.length];
+  await cfg.update('direction', next, vscode.ConfigurationTarget.Global);
+  vscode.window.setStatusBarMessage(`$(arrow-swap) Copilot RTL direction: ${next}`, 2000);
+}
+
+async function pickFontFamily(currentFontFamily) {
+  const fonts = await listSystemFonts();
+
+  const items = [
+    {
+      label: '$(edit) Enter a font name manually…',
+      description: 'Type any font family name',
+      value: null,
+    },
+    ...fonts.map((name) => ({
+      label: name === currentFontFamily ? `$(check) ${name}` : name,
+      value: name,
+    })),
+  ];
+
+  const picked = await vscode.window.showQuickPick(items, {
+    title: 'Copilot RTL — Font Family',
+    placeHolder: fonts.length
+      ? 'Pick an installed font, or enter one manually'
+      : 'Could not read installed fonts — enter one manually',
+    matchOnDescription: true,
+  });
+  if (!picked) return undefined;
+  if (picked.value) return picked.value;
+
+  const input = await vscode.window.showInputBox({
+    title: 'Copilot RTL — Font Family',
+    prompt: 'Name of an installed font. Leave as Vazirmatn to use the bundled fallback automatically.',
+    value: currentFontFamily,
+  });
+  return input ? input.trim() : undefined;
+}
+
 async function openMenu() {
   const config = readConfig();
   const cfg = vscode.workspace.getConfiguration(CONFIG_SECTION);
 
+  const radio = (value) =>
+    config.direction === value ? '$(circle-large-filled)' : '$(circle-large-outline)';
+
   /** @type {vscode.QuickPickItem & { action: string }[]} */
   const items = [
     {
+      action: 'direction-auto',
+      label: `${radio('auto')} Automatic (per paragraph)`,
+      description: 'Detect RTL/LTR for each block from its own text — best for bilingual chats',
+    },
+    {
       action: 'direction-rtl',
-      label: `${config.direction === 'rtl' ? '$(circle-large-filled)' : '$(circle-large-outline)'} Right-to-left (RTL)`,
+      label: `${radio('rtl')} Right-to-left (RTL)`,
       description: 'Force RTL direction in the chat area',
     },
     {
       action: 'direction-ltr',
-      label: `${config.direction === 'ltr' ? '$(circle-large-filled)' : '$(circle-large-outline)'} Left-to-right (LTR)`,
+      label: `${radio('ltr')} Left-to-right (LTR)`,
       description: 'Force LTR direction in the chat area',
     },
     {
@@ -397,6 +585,9 @@ async function openMenu() {
   if (!picked) return;
 
   switch (picked.action) {
+    case 'direction-auto':
+      await cfg.update('direction', 'auto', vscode.ConfigurationTarget.Global);
+      break;
     case 'direction-rtl':
       await cfg.update('direction', 'rtl', vscode.ConfigurationTarget.Global);
       break;
@@ -404,12 +595,8 @@ async function openMenu() {
       await cfg.update('direction', 'ltr', vscode.ConfigurationTarget.Global);
       break;
     case 'font-family': {
-      const input = await vscode.window.showInputBox({
-        title: 'Copilot RTL — Font Family',
-        prompt: 'Name of an installed font. Leave as Vazirmatn to use the bundled fallback automatically.',
-        value: config.fontFamily,
-      });
-      if (input) await cfg.update('fontFamily', input.trim(), vscode.ConfigurationTarget.Global);
+      const chosen = await pickFontFamily(config.fontFamily);
+      if (chosen) await cfg.update('fontFamily', chosen, vscode.ConfigurationTarget.Global);
       break;
     }
     case 'font-size': {
@@ -454,6 +641,7 @@ function activate(context) {
       'copilotRtl.enable',
       withErrorHandling(async () => {
         forceEnable(context);
+        rememberPatchState(context, true);
         await offerReload('Copilot RTL patch applied. Reload the window for it to take effect.');
       })
     ),
@@ -461,6 +649,7 @@ function activate(context) {
       'copilotRtl.disable',
       withErrorHandling(async () => {
         const changed = removePatch();
+        rememberPatchState(context, false);
         await offerReload(
           changed
             ? 'Copilot RTL patch removed. Reload the window for it to take effect.'
@@ -468,7 +657,8 @@ function activate(context) {
         );
       })
     ),
-    vscode.commands.registerCommand('copilotRtl.openMenu', withErrorHandling(openMenu))
+    vscode.commands.registerCommand('copilotRtl.openMenu', withErrorHandling(openMenu)),
+    vscode.commands.registerCommand('copilotRtl.cycleDirection', withErrorHandling(cycleDirection))
   );
 
   context.subscriptions.push(
@@ -489,13 +679,21 @@ function activate(context) {
   const autoEnable = vscode.workspace.getConfiguration(CONFIG_SECTION).get('autoEnable', true);
   if (autoEnable) {
     try {
+      const wasReverted = wasPatchReverted(context);
       const changed = applyPatch(context);
       if (changed) {
-        offerReload('Copilot RTL patch applied. Reload the window for it to take effect.');
+        rememberPatchState(context, true);
+        offerReload(
+          wasReverted
+            ? 'Copilot RTL: the patch was missing (a VS Code update likely overwrote it) and has been re-applied. Reload the window for it to take effect.'
+            : 'Copilot RTL patch applied. Reload the window for it to take effect.'
+        );
       }
     } catch (err) {
       console.error('Copilot RTL: auto-patch failed', err);
     }
+  } else {
+    notifyIfPatchReverted(context);
   }
 }
 

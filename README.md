@@ -4,13 +4,16 @@ A Visual Studio Code extension that adds **Right-to-Left (RTL)** support to the 
 
 ## Features
 
-- Applies RTL (or LTR) direction to the Copilot Chat interface — switchable anytime, **applies instantly, no reload**
-- Custom font family, font size, and line spacing for the chat area — also instant
+- **Automatic direction per paragraph** — each paragraph, list item, heading and table cell gets its own RTL/LTR direction based on its text, so a mixed Persian/English conversation reads correctly (default)
+- Or force RTL/LTR for the whole chat area — switchable anytime, **applies instantly, no reload**
+- <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd> cycles auto → RTL → LTR
+- Custom font family, font size, and line spacing for the chat area — also instant, with a picker listing the fonts installed on your system
 - Ships with the [Vazirmatn font](https://github.com/rastikerdar/vazirmatn) bundled, used automatically as a fallback if it isn't installed on your system
 - Preserves LTR direction for code blocks
 - Automatically detects RTL vs. LTR per line in the prompt input box
+- Detects Persian, Arabic, Hebrew, Thaana, NKo and Syriac text
 - Quick-access menu in the status bar for direction, font, size, and line spacing
-- Re-applies itself on startup, including after a VS Code update overwrites the patch
+- Re-applies itself on startup, and tells you when a VS Code update has reverted the patch
 
 ## Preview
 
@@ -33,22 +36,24 @@ That's it — no console, no manual steps after the first reload. The [Vazirmatn
 | Command | Description |
 |---|---|
 | `Copilot RTL: Open Menu (direction, font, size…)` | Quick menu — also available by clicking the status bar item |
+| `Copilot RTL: Cycle Direction (auto → RTL → LTR)` | Switch direction without opening the menu — bound to <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd> (<kbd>Cmd</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd> on macOS) |
 | `Copilot RTL: Enable (requires reload)` | Apply the patch now — also the right thing to run if a VS Code update reverted it |
 | `Copilot RTL: Disable (requires reload; run before uninstalling)` | Remove the patch and restore the original files |
 
 ## Status bar
 
-A small item (e.g. `⇄ RTL`) sits in the bottom-right status bar. Click it anytime to switch between RTL/LTR, or to change the font family, size, or line spacing — no need to dig through Settings, and no reload: changes show up within about a second.
+A small item (e.g. `⇄ AUTO`, `← RTL`) sits in the bottom-right status bar. Click it anytime to switch between automatic/RTL/LTR, or to change the font family, size, or line spacing — no need to dig through Settings, and no reload: changes show up within about a second.
 
 ## Settings
 
 | Setting | Default | Description |
 |---|---|---|
-| `copilotRtl.direction` | `rtl` | `rtl` or `ltr` — direction forced in the chat area (the prompt input box always auto-detects per line regardless) |
+| `copilotRtl.direction` | `auto` | `auto` (detect per paragraph/list item/heading), `rtl`, or `ltr` — direction used in the chat area (the prompt input box always auto-detects per line regardless) |
 | `copilotRtl.fontFamily` | `Vazirmatn` | Font used in the chat area; falls back to Vazirmatn (bundled) if not installed |
 | `copilotRtl.fontSize` | `13` | Font size in pixels used in the chat area |
 | `copilotRtl.lineHeight` | `1.6` | Line spacing (line height multiplier) used in the chat area |
 | `copilotRtl.autoEnable` | `true` | Automatically (re)apply the patch on startup |
+| `copilotRtl.notifyWhenPatchReverted` | `true` | When `autoEnable` is off, warn if a VS Code update reverted the patch and offer to re-apply it |
 
 All of the above can also be changed from the status bar menu instead of the Settings UI. `direction`, `fontFamily`, `fontSize`, and `lineHeight` all apply live — no reload needed. Only `autoEnable`, and the Enable/Disable commands, need one (see [TECHNICAL.md](./TECHNICAL.md) for why).
 
@@ -73,7 +78,7 @@ If you already uninstalled without disabling first, see [TECHNICAL.md](./TECHNIC
 If you'd rather not install anything, you can still run the original script by hand:
 
 1. Open **Help > Toggle Developer Tools > Console**.
-2. Paste the contents of [`rtl-fix.js`](./rtl-fix.js) and press **Enter**. (Edit the `DEFAULT_CONFIG` object near the top first if you want something other than the defaults — there's no live settings menu outside the extension.)
+2. Paste the contents of [`rtl-fix.js`](./rtl-fix.js) and press **Enter**. (Edit the `DEFAULT_CONFIG` object near the top first if you want something other than the defaults — `direction` accepts `auto`, `rtl` or `ltr`; there's no live settings menu outside the extension.)
 3. The effect is temporary and resets on reload — repeat whenever needed.
 
 ## To-Do & Improvements
@@ -86,6 +91,10 @@ If you'd rather not install anything, you can still run the original script by h
 - [x] Custom font family and size
 - [x] Line spacing control
 - [x] Apply settings changes live, without a window reload
+- [x] Automatic per-paragraph direction detection in the chat area
+- [x] Keyboard shortcut to switch direction
+- [x] Font picker listing installed system fonts
+- [x] Notify when a VS Code update reverts the patch
 
 ## For developers
 

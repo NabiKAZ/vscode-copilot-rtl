@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.3.0
+
+- **New `auto` direction mode, now the default.** Instead of forcing one
+  direction on the whole chat area, each rendered block (paragraph, list item,
+  heading, table cell, blockquote…) gets its own direction based on its text —
+  so Persian answers read RTL and English answers read LTR in the same
+  conversation. Code blocks and editors are left LTR as before. `rtl` and `ltr`
+  remain available for forcing a single direction.
+- **Better direction detection, shared by the chat area and the prompt box.**
+  Detection now keys on the first *strong* character, skipping digits, bullets,
+  quotes and other neutral characters, so a line like `1. سلام` is no longer
+  treated as LTR. The character ranges now also cover Hebrew, Arabic
+  Supplement/Extended, Arabic Presentation Forms, Thaana, NKo and Syriac —
+  previously only `U+0600–U+06FF` was recognised, despite Hebrew being listed
+  as supported.
+- **New `Copilot RTL: Cycle Direction` command**, bound to `Ctrl+Alt+R`
+  (`Cmd+Alt+R` on macOS), cycling auto → RTL → LTR.
+- **Font picker lists installed system fonts** instead of requiring the family
+  name to be typed by hand; manual entry is still offered as the first choice.
+- **A patch reverted by a VS Code update is now detected explicitly.** The
+  re-apply notification says so when it happens, and with `autoEnable` off the
+  new `copilotRtl.notifyWhenPatchReverted` setting warns with a *Re-apply Now*
+  action instead of the styling quietly stopping working.
+- The status bar item now shows a mode-specific icon.
+
 ## 2.2.1
 
 - Fixed the live-apply mechanism actually working: settings polling now uses

@@ -3,16 +3,23 @@
  * It applies a configurable direction, font family, font size, and line height to the chat area.
  * Code blocks and result editors remain LTR (Left-to-Right) for proper code display.
  *
- * Part 1: Chat area (rendered markdown + question carousel) -> forced direction/font via CSS,
+ * Part 1: Chat area (rendered markdown + question carousel) -> direction/font via CSS,
  *         config polled live from copilot-rtl-config.json so settings changes apply without a reload.
- * Part 2: Prompt input box (Monaco editor) -> per-line auto direction detection (RTL/LTR)
- *         based on the first non-space character of each line, independent of Part 1's setting.
+ *         `direction: 'auto'` resolves direction per rendered block (paragraph, list item,
+ *         heading, table cell…) from that block's own text, so a bilingual conversation
+ *         reads correctly: Persian answers RTL, English answers LTR.
+ * Part 2: Prompt input box (Monaco editor) -> per-line auto direction detection (RTL/LTR),
+ *         independent of Part 1's setting.
+ *
+ * Both parts share one detection routine keyed on the first *strong* character of the
+ * text, so leading digits, bullets, quotes and other neutral markdown characters don't
+ * flip an otherwise RTL line to LTR.
  *
  * This file is injected into VS Code's workbench window by extension.js — it is not
  * loaded as a normal extension script, so it has no access to the `vscode` API and
  * runs directly against the workbench DOM, exactly like pasting it into DevTools.
  *
- * @version 2.2.1
+ * @version 2.3.0
  * @author  NabiKAZ
  * @license GPLv3
  * @see https://github.com/NabiKAZ/vscode-copilot-rtl
@@ -25,7 +32,7 @@
   // point before the first live config update arrives when run by the
   // extension. Edit these directly for standalone use.
   const DEFAULT_CONFIG = {
-    direction: 'rtl',
+    direction: 'auto', // 'auto' | 'rtl' | 'ltr'
     fontFamily: 'Vazirmatn',
     fontSize: 13,
     lineHeight: 1.6,
@@ -56,10 +63,43 @@
   console.log('[vscode-copilot-rtl] script loaded');
 
   // -----------------------------------------------------------------------
+  // Shared direction detection (used by both parts)
+  // -----------------------------------------------------------------------
+
+  // Strong RTL scripts: Hebrew, Arabic (+ Supplement/Extended-A/B), Thaana,
+  // NKo, Syriac, and the Arabic Presentation Forms blocks. The previous
+  // version only covered U+0600–U+06FF, so Hebrew — which the extension
+  // claims to support — was detected as LTR.
+  const RTL_CHAR_REGEX =
+    /[\u0591-\u07FF\u0860-\u086A\u08A0-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/;
+  const LTR_CHAR_REGEX = /[A-Za-z\u00C0-\u024F\u0370-\u058F\u0E00-\u0E7F\u1E00-\u1FFF]/;
+
+  /**
+   * Direction of a string from its first *strong* character, skipping neutral
+   * ones (spaces, digits, punctuation, markdown bullets, emoji…). Returns
+   * `null` when the text carries no directional signal at all, so callers can
+   * leave such blocks alone instead of forcing them one way.
+   */
+  function detectDirection(text) {
+    if (!text) return null;
+    for (const char of text) {
+      if (RTL_CHAR_REGEX.test(char)) return 'rtl';
+      if (LTR_CHAR_REGEX.test(char)) return 'ltr';
+    }
+    return null;
+  }
+
+  // -----------------------------------------------------------------------
   // Part 1: Chat area — direction, font family, font size, line height.
   // Re-rendered live whenever a new config is polled in, no reload needed.
   // -----------------------------------------------------------------------
   function buildChatAreaCss(config) {
+    // In 'auto' mode direction is set per block by the observer below, so the
+    // stylesheet must not declare one at all (an !important rule here would
+    // beat the per-element inline styles).
+    const directionRule =
+      config.direction === 'auto' ? '' : `direction: ${config.direction} !important;`;
+
     return `
       /* Fallback so "Vazirmatn" still renders even when it isn't installed
          on the system: local() checks the system font first, url() is the
@@ -76,7 +116,7 @@
       /* COPILOT RTL PATCH */
       .rendered-markdown > *:not(div),
       .chat-question-carousel-widget-container {
-        direction: ${config.direction} !important;
+        ${directionRule}
         font-family: "${config.fontFamily}", 'Vazirmatn', sans-serif !important;
         font-size: ${config.fontSize}px !important;
         line-height: ${config.lineHeight} !important;
@@ -91,7 +131,119 @@
 
   function renderChatArea(config) {
     chatAreaStyle.textContent = buildChatAreaCss(config);
+    setAutoDirectionEnabled(config.direction === 'auto');
   }
+
+  // --- 'auto' mode: resolve direction per rendered block ------------------
+
+  // Block-level markdown elements worth aligning individually. `pre` (and
+  // anything inside it) is deliberately absent: code always stays LTR.
+  const AUTO_BLOCK_SELECTOR = [
+    'p',
+    'li',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'blockquote',
+    'th',
+    'td',
+    'dt',
+    'dd',
+    'summary',
+  ]
+    .map((tag) => `.rendered-markdown ${tag}, .chat-question-carousel-widget-container ${tag}`)
+    .join(', ');
+
+  const AUTO_MARKER_ATTRIBUTE = 'data-copilot-rtl-auto';
+  const AUTO_SKIP_SELECTOR = 'pre, code, .monaco-editor, .interactive-result-editor';
+
+  function applyBlockDirection(el) {
+    if (el.closest(AUTO_SKIP_SELECTOR)) return;
+
+    const dir = detectDirection(el.textContent);
+    if (!dir) return; // no directional signal — leave the block untouched
+    if (el.getAttribute(AUTO_MARKER_ATTRIBUTE) === dir) return; // already correct
+
+    el.setAttribute(AUTO_MARKER_ATTRIBUTE, dir);
+    el.style.direction = dir;
+    el.style.textAlign = dir === 'rtl' ? 'right' : 'left';
+  }
+
+  function clearBlockDirections() {
+    document.querySelectorAll(`[${AUTO_MARKER_ATTRIBUTE}]`).forEach((el) => {
+      el.removeAttribute(AUTO_MARKER_ATTRIBUTE);
+      el.style.direction = '';
+      el.style.textAlign = '';
+    });
+  }
+
+  let autoDirectionObserver = null;
+  let autoDirectionScheduled = false;
+  /** Sweep every block instead of only the mutated ones (first run / mode switch). */
+  let autoDirectionFullSweep = false;
+  const autoDirectionPendingRoots = new Set();
+
+  function sweepAutoDirection() {
+    autoDirectionScheduled = false;
+
+    if (autoDirectionFullSweep) {
+      autoDirectionFullSweep = false;
+      autoDirectionPendingRoots.clear();
+      document.querySelectorAll(AUTO_BLOCK_SELECTOR).forEach(applyBlockDirection);
+      return;
+    }
+
+    for (const root of autoDirectionPendingRoots) {
+      if (!root.isConnected) continue;
+      if (root.matches(AUTO_BLOCK_SELECTOR)) applyBlockDirection(root);
+      root.querySelectorAll(AUTO_BLOCK_SELECTOR).forEach(applyBlockDirection);
+    }
+    autoDirectionPendingRoots.clear();
+  }
+
+  /** Coalesce the many mutations of a streaming answer into one pass per frame. */
+  function scheduleAutoDirectionSweep() {
+    if (autoDirectionScheduled) return;
+    autoDirectionScheduled = true;
+    requestAnimationFrame(sweepAutoDirection);
+  }
+
+  function queueAutoDirection(mutations) {
+    for (const mutation of mutations) {
+      // characterData mutations report the text node itself; walk up to an element.
+      const target =
+        mutation.target.nodeType === Node.ELEMENT_NODE
+          ? mutation.target
+          : mutation.target.parentElement;
+      if (target) autoDirectionPendingRoots.add(target);
+    }
+    scheduleAutoDirectionSweep();
+  }
+
+  function setAutoDirectionEnabled(enabled) {
+    if (enabled === Boolean(autoDirectionObserver)) return;
+
+    if (!enabled) {
+      autoDirectionObserver.disconnect();
+      autoDirectionObserver = null;
+      autoDirectionPendingRoots.clear();
+      clearBlockDirections();
+      return;
+    }
+
+    autoDirectionObserver = new MutationObserver(queueAutoDirection);
+    autoDirectionObserver.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+    autoDirectionFullSweep = true;
+    scheduleAutoDirectionSweep();
+  }
+
   renderChatArea(currentConfig);
 
   // --- live config polling (fetch, not script injection — see note above) -
@@ -128,7 +280,6 @@
   // -----------------------------------------------------------------------
   // Part 2: Prompt input box — auto-detect direction per line (RTL/LTR)
   // -----------------------------------------------------------------------
-  const RTL_CHAR_REGEX = /[\u0600-\u06FF]/;
   const EDITOR_CONTAINER_SELECTOR = '.chat-editor-container';
   const LINE_SELECTOR = '.view-line';
 
@@ -142,11 +293,9 @@
   document.head.appendChild(editorTransitionStyle);
 
   function applyLineDirection(line) {
-    const text = line.innerText?.trimStart() || '';
-    const firstChar = text[0] || '';
-    const isRTL = RTL_CHAR_REGEX.test(firstChar); // check only the first non-space character
-    const dir = isRTL ? 'rtl' : 'ltr';
-    const align = isRTL ? 'right' : 'left';
+    const text = line.innerText || '';
+    const dir = detectDirection(text) || 'ltr'; // empty/neutral lines keep the LTR default
+    const align = dir === 'rtl' ? 'right' : 'left';
 
     line.style.direction = dir;
     line.style.textAlign = align;

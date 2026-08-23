@@ -2,7 +2,7 @@
   "name": "vscode-copilot-rtl",
   "displayName": "Copilot Chat RTL Support",
   "description": "Adds Right-to-Left (RTL) support and Vazirmatn font styling to the GitHub Copilot Chat panel, for Persian/Farsi, Arabic, Hebrew and other RTL languages.",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "publisher": "NabiKAZ",
   "license": "GPL-3.0-only",
   "engines": {
@@ -48,6 +48,17 @@
       {
         "command": "copilotRtl.openMenu",
         "title": "Copilot RTL: Open Menu (direction, font, size…)"
+      },
+      {
+        "command": "copilotRtl.cycleDirection",
+        "title": "Copilot RTL: Cycle Direction (auto → RTL → LTR)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "copilotRtl.cycleDirection",
+        "key": "ctrl+alt+r",
+        "mac": "cmd+alt+r"
       }
     ],
     "configuration": {
@@ -58,15 +69,21 @@
           "default": true,
           "description": "Automatically (re)apply the RTL patch to VS Code's workbench on startup."
         },
+        "copilotRtl.notifyWhenPatchReverted": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a notification when the patch is found missing on startup (typically after a VS Code update overwrote it) and 'copilotRtl.autoEnable' is off, offering to re-apply it."
+        },
         "copilotRtl.direction": {
           "type": "string",
-          "enum": ["rtl", "ltr"],
+          "enum": ["auto", "rtl", "ltr"],
           "enumDescriptions": [
+            "Detect direction per paragraph/list item/heading from its own text (best for bilingual chats)",
             "Force right-to-left direction in the chat area",
             "Force left-to-right direction in the chat area"
           ],
-          "default": "rtl",
-          "description": "Text direction forced on the Copilot Chat area (applies live, no reload needed). The prompt input box always auto-detects direction per line, regardless of this setting."
+          "default": "auto",
+          "description": "Text direction used in the Copilot Chat area (applies live, no reload needed). The prompt input box always auto-detects direction per line, regardless of this setting."
         },
         "copilotRtl.fontFamily": {
           "type": "string",
