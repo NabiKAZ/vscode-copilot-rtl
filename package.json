@@ -1,0 +1,70 @@
+{
+  "name": "copilot-rtl",
+  "displayName": "Copilot Chat RTL Support",
+  "description": "Adds Right-to-Left (RTL) support and Vazirmatn font styling to the GitHub Copilot Chat panel, for Persian/Farsi, Arabic, Hebrew and other RTL languages.",
+  "version": "2.0.0",
+  "publisher": "NabiKAZ",
+  "license": "GPL-3.0-only",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "rtl",
+    "farsi",
+    "persian",
+    "arabic",
+    "copilot",
+    "copilot chat",
+    "vazirmatn",
+    "right-to-left"
+  ],
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NabiKAZ/vscode-copilot-rtl"
+  },
+  "bugs": {
+    "url": "https://github.com/NabiKAZ/vscode-copilot-rtl/issues"
+  },
+  "homepage": "https://github.com/NabiKAZ/vscode-copilot-rtl#readme",
+  "author": "NabiKAZ",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "copilotRtl.enable",
+        "title": "Copilot RTL: Enable"
+      },
+      {
+        "command": "copilotRtl.disable",
+        "title": "Copilot RTL: Disable"
+      },
+      {
+        "command": "copilotRtl.reapply",
+        "title": "Copilot RTL: Re-apply Patch (after a VS Code update)"
+      }
+    ],
+    "configuration": {
+      "title": "Copilot RTL",
+      "properties": {
+        "copilotRtl.autoEnable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically (re)apply the RTL patch to VS Code's workbench on startup."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "echo \"No build step required\""
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^2.24.0"
+  }
+}
