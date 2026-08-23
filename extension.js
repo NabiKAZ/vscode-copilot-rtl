@@ -6,16 +6,26 @@
  * only our own marked block / checksum entry — so other extensions
  * patching the same files aren't affected. Full rationale: TECHNICAL.md.
  *
- * rtl-fix.js itself never changes per-user: settings (direction, font,
- * size, line height) are written as plain JSON to copilot-rtl-config.json
- * next to workbench.html, which the already-running injected script polls
- * every second via fetch() and applies live — no reload needed for settings
- * changes. workbench.html/product.json are only touched by Enable/Disable/
- * Reapply. (An earlier version polled a <script src> instead of fetching
- * JSON, but that hit workbench's Trusted Types restriction on dynamically
- * assigning a script's src — see TECHNICAL.md.)
+ * Everything this extension places next to workbench.html (script, config,
+ * bundled font) lives under one ASSET_FOLDER_NAME folder, so it's obvious
+ * at a glance what belongs to this extension and the whole folder can be
+ * removed on Disable.
  *
- * @version 2.2.0
+ * rtl-fix.js itself never changes per-user: settings (direction, font,
+ * size, line height) are written as plain JSON to <asset folder>/
+ * copilot-rtl-config.json, which the already-running injected script polls
+ * every second via fetch() and applies live — no reload needed for settings
+ * changes. workbench.html/product.json are only touched by Enable/Disable.
+ * (An earlier version polled a <script src> instead of fetching JSON, but
+ * that hit workbench's Trusted Types restriction on dynamically assigning a
+ * script's src — see TECHNICAL.md.)
+ *
+ * "Enable" doubles as what used to be a separate "Re-apply" command: it
+ * always strips any existing patch first, then re-applies fresh, so it's
+ * also the right thing to run after a VS Code update reverts the patch —
+ * one clearly-named action instead of two overlapping ones.
+ *
+ * @version 2.2.1
  * @author  NabiKAZ
  * @license GPLv3
  * @see https://github.com/NabiKAZ/vscode-copilot-rtl
@@ -29,9 +39,9 @@ const path = require('path');
 
 const MARKER_START = '<!-- COPILOT-RTL-PATCH:START -->';
 const MARKER_END = '<!-- COPILOT-RTL-PATCH:END -->';
+const ASSET_FOLDER_NAME = 'vscode-copilot-rtl';
 const SCRIPT_FILE_NAME = 'copilot-rtl-fix.js';
 const CONFIG_FILE_NAME = 'copilot-rtl-config.json';
-const ASSETS_DIR_NAME = 'copilot-rtl-assets';
 const BUNDLED_FONT_FILE_NAME = 'Vazirmatn-Variable.woff2';
 
 const CONFIG_SECTION = 'copilotRtl';
@@ -72,7 +82,7 @@ function isPatched(html) {
 }
 
 function buildInjection(scriptFileName) {
-  return `${MARKER_START}\n<script src="./${scriptFileName}"></script>\n${MARKER_END}\n`;
+  return `${MARKER_START}\n<script src="./${ASSET_FOLDER_NAME}/${scriptFileName}"></script>\n${MARKER_END}\n`;
 }
 
 /**
@@ -100,7 +110,7 @@ function readConfig() {
     direction: cfg.get('direction', 'rtl'),
     fontFamily: cfg.get('fontFamily', 'Vazirmatn'),
     fontSize: cfg.get('fontSize', 13),
-    lineHeight: cfg.get('lineHeight', 1.8),
+    lineHeight: cfg.get('lineHeight', 1.6),
   };
 }
 
@@ -108,21 +118,28 @@ function readConfig() {
 // Patching workbench.html / product.json / synced assets
 // ---------------------------------------------------------------------------
 
-/** Copy rtl-fix.js next to workbench.html. Its content is static/generic —
+/** The one folder next to workbench.html that holds everything this
+ *  extension places there — created on demand, removed entirely on Disable. */
+function assetFolderPath(htmlPath) {
+  return path.join(path.dirname(htmlPath), ASSET_FOLDER_NAME);
+}
+
+function ensureAssetFolder(htmlPath) {
+  const dir = assetFolderPath(htmlPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/** Copy rtl-fix.js into the asset folder. Its content is static/generic —
  *  settings live in the separate JSON config file it polls (see writeConfigFile). */
 function syncScriptFile(context, htmlPath) {
-  const scriptDest = path.join(path.dirname(htmlPath), SCRIPT_FILE_NAME);
+  const scriptDest = path.join(ensureAssetFolder(htmlPath), SCRIPT_FILE_NAME);
   fs.copyFileSync(path.join(context.extensionPath, 'rtl-fix.js'), scriptDest);
   return scriptDest;
 }
 
-function removeScriptFile(htmlPath) {
-  const scriptDest = path.join(path.dirname(htmlPath), SCRIPT_FILE_NAME);
-  if (fs.existsSync(scriptDest)) fs.unlinkSync(scriptDest);
-}
-
 /**
- * Write the live-polled config as plain JSON next to workbench.html. The
+ * Write the live-polled config as plain JSON into the asset folder. The
  * already running injected script (rtl-fix.js) fetches this ~every second
  * and applies it immediately — this is what makes settings changes take
  * effect without a window reload. Plain JSON (not a .js file) deliberately:
@@ -131,34 +148,31 @@ function removeScriptFile(htmlPath) {
  * only allow-lists VS Code's own internal policy names.
  */
 function writeConfigFile(htmlPath, config) {
-  const dest = path.join(path.dirname(htmlPath), CONFIG_FILE_NAME);
+  const dest = path.join(ensureAssetFolder(htmlPath), CONFIG_FILE_NAME);
   writeFile(dest, JSON.stringify(config));
   return dest;
 }
 
-function removeConfigFile(htmlPath) {
-  const dest = path.join(path.dirname(htmlPath), CONFIG_FILE_NAME);
-  if (fs.existsSync(dest)) fs.unlinkSync(dest);
-}
-
-/** Copy the bundled fallback font next to workbench.html, once. */
+/** Copy the bundled fallback font into the asset folder, once. No
+ *  subfolder of its own — it sits next to the script/config directly. */
 function syncFontFile(context, htmlPath) {
-  const assetsDir = path.join(path.dirname(htmlPath), ASSETS_DIR_NAME);
-  const dest = path.join(assetsDir, BUNDLED_FONT_FILE_NAME);
+  const dest = path.join(ensureAssetFolder(htmlPath), BUNDLED_FONT_FILE_NAME);
   if (fs.existsSync(dest)) return dest;
-
-  if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir, { recursive: true });
   fs.copyFileSync(path.join(context.extensionPath, 'fonts', BUNDLED_FONT_FILE_NAME), dest);
   return dest;
 }
 
-function removeFontFile(htmlPath) {
-  const assetsDir = path.join(path.dirname(htmlPath), ASSETS_DIR_NAME);
-  const dest = path.join(assetsDir, BUNDLED_FONT_FILE_NAME);
-  if (fs.existsSync(dest)) fs.unlinkSync(dest);
-  if (fs.existsSync(assetsDir) && fs.readdirSync(assetsDir).length === 0) {
-    fs.rmdirSync(assetsDir);
+/** Remove the script/config/font files and the asset folder itself —
+ *  everything under it is wholly ours, so this is always safe. */
+function removeAssetFolder(htmlPath) {
+  const dir = assetFolderPath(htmlPath);
+  if (!fs.existsSync(dir)) return;
+  for (const name of [SCRIPT_FILE_NAME, CONFIG_FILE_NAME, BUNDLED_FONT_FILE_NAME]) {
+    const filePath = path.join(dir, name);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   }
+  // Only remove the folder if nothing unexpected got left behind in it.
+  if (fs.readdirSync(dir).length === 0) fs.rmdirSync(dir);
 }
 
 /**
@@ -282,12 +296,19 @@ function removePatch() {
     writeFile(htmlPath, result);
   }
 
-  removeScriptFile(htmlPath);
-  removeFontFile(htmlPath);
-  removeConfigFile(htmlPath);
+  removeAssetFolder(htmlPath);
   restoreProductJsonChecksum(appRoot, relHtml);
 
   return removedCount > 0;
+}
+
+/** Always strip any existing patch first, then apply fresh — this is what
+ *  the Enable command runs (covers both "not yet patched" and "patched but
+ *  stale after a VS Code update" in one action). Startup/autoEnable uses
+ *  plain applyPatch() instead, so it stays a no-op when nothing changed. */
+function forceEnable(context) {
+  removePatch();
+  return applyPatch(context);
 }
 
 async function offerReload(message) {
@@ -368,8 +389,8 @@ async function openMenu() {
       label: '$(whitespace) Change line spacing…',
       description: `${config.lineHeight}`,
     },
-    { action: 'reapply', label: '$(sync) Re-apply patch', description: 'Useful after a VS Code update' },
-    { action: 'disable', label: '$(circle-slash) Disable Copilot RTL' },
+    { action: 'enable', label: '$(check) Enable Copilot RTL (requires reload)', description: 'Also fixes it after a VS Code update' },
+    { action: 'disable', label: '$(circle-slash) Disable Copilot RTL (requires reload)', description: 'Run this before uninstalling the extension' },
   ];
 
   const picked = await vscode.window.showQuickPick(items, { title: 'Copilot RTL' });
@@ -404,15 +425,15 @@ async function openMenu() {
     case 'line-height': {
       const input = await vscode.window.showInputBox({
         title: 'Copilot RTL — Line Spacing',
-        prompt: 'Line height multiplier (e.g. 1.8 ≈ default, 1 = tight, 2.5 = airy)',
+        prompt: 'Line height multiplier (e.g. 1.6 ≈ default, 1 = tight, 2.5 = airy)',
         value: String(config.lineHeight),
         validateInput: (v) => (/^\d+(\.\d+)?$/.test(v) && Number(v) > 0 ? undefined : 'Enter a positive number'),
       });
       if (input) await cfg.update('lineHeight', Number(input), vscode.ConfigurationTarget.Global);
       break;
     }
-    case 'reapply':
-      vscode.commands.executeCommand('copilotRtl.reapply');
+    case 'enable':
+      vscode.commands.executeCommand('copilotRtl.enable');
       break;
     case 'disable':
       vscode.commands.executeCommand('copilotRtl.disable');
@@ -432,12 +453,8 @@ function activate(context) {
     vscode.commands.registerCommand(
       'copilotRtl.enable',
       withErrorHandling(async () => {
-        const changed = applyPatch(context);
-        await offerReload(
-          changed
-            ? 'Copilot RTL patch applied. Reload the window for it to take effect.'
-            : 'Copilot RTL patch is already applied (assets refreshed).'
-        );
+        forceEnable(context);
+        await offerReload('Copilot RTL patch applied. Reload the window for it to take effect.');
       })
     ),
     vscode.commands.registerCommand(
@@ -448,16 +465,6 @@ function activate(context) {
           changed
             ? 'Copilot RTL patch removed. Reload the window for it to take effect.'
             : 'Copilot RTL patch was not applied.'
-        );
-      })
-    ),
-    vscode.commands.registerCommand(
-      'copilotRtl.reapply',
-      withErrorHandling(async () => {
-        removePatch();
-        applyPatch(context);
-        await offerReload(
-          'Copilot RTL patch re-applied (useful after a VS Code update overwrote it). Reload the window for it to take effect.'
         );
       })
     ),

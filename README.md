@@ -16,13 +16,13 @@ A Visual Studio Code extension that adds **Right-to-Left (RTL)** support to the 
 
 Here is an example of the result after applying the extension:
 
-![Copilot RTL Preview](https://github.com/user-attachments/assets/076a7941-13c5-4f01-a4f1-2b8225c9673f)
+![VSCode Copilot RTL Preview](assets/vscode-copilot-rtl-screenshot.png)
 
 ## Installation
 
-1. Install the extension from the VS Code Marketplace (search for **"Copilot Chat RTL Support"**), or install the `.vsix` manually:
+1. Install the extension from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=NabiKAZ.vscode-copilot-rtl) (search for **"Copilot Chat RTL Support"**), or install the `.vsix` manually:
    ```
-   code --install-extension copilot-rtl-X.X.X.vsix
+   code --install-extension vscode-copilot-rtl-X.X.X.vsix
    ```
 2. Reload the window when prompted (or run **Developer: Reload Window**).
 
@@ -33,9 +33,8 @@ That's it — no console, no manual steps after the first reload. The [Vazirmatn
 | Command | Description |
 |---|---|
 | `Copilot RTL: Open Menu (direction, font, size…)` | Quick menu — also available by clicking the status bar item |
-| `Copilot RTL: Enable` | Apply the patch now |
-| `Copilot RTL: Disable` | Remove the patch and restore the original files |
-| `Copilot RTL: Re-apply Patch (after a VS Code update)` | Force re-apply, useful if an update reverted it |
+| `Copilot RTL: Enable (requires reload)` | Apply the patch now — also the right thing to run if a VS Code update reverted it |
+| `Copilot RTL: Disable (requires reload; run before uninstalling)` | Remove the patch and restore the original files |
 
 ## Status bar
 
@@ -48,10 +47,10 @@ A small item (e.g. `⇄ RTL`) sits in the bottom-right status bar. Click it anyt
 | `copilotRtl.direction` | `rtl` | `rtl` or `ltr` — direction forced in the chat area (the prompt input box always auto-detects per line regardless) |
 | `copilotRtl.fontFamily` | `Vazirmatn` | Font used in the chat area; falls back to Vazirmatn (bundled) if not installed |
 | `copilotRtl.fontSize` | `13` | Font size in pixels used in the chat area |
-| `copilotRtl.lineHeight` | `1.8` | Line spacing (line height multiplier) used in the chat area |
+| `copilotRtl.lineHeight` | `1.6` | Line spacing (line height multiplier) used in the chat area |
 | `copilotRtl.autoEnable` | `true` | Automatically (re)apply the patch on startup |
 
-All of the above can also be changed from the status bar menu instead of the Settings UI. `direction`, `fontFamily`, `fontSize`, and `lineHeight` all apply live — no reload needed. Only `autoEnable`, and the Enable/Disable/Re-apply commands, need one (see [TECHNICAL.md](./TECHNICAL.md) for why).
+All of the above can also be changed from the status bar menu instead of the Settings UI. `direction`, `fontFamily`, `fontSize`, and `lineHeight` all apply live — no reload needed. Only `autoEnable`, and the Enable/Disable commands, need one (see [TECHNICAL.md](./TECHNICAL.md) for why).
 
 ## ⚠️ Uninstalling
 
@@ -101,6 +100,7 @@ This project is licensed under the **GNU General Public License v3.0**. See the 
 If this project has been useful to you and you'd like to support its development:
 
 - ⭐ **Give a Star**: Show your support with a ⭐ on the GitHub repository.
+- 🌟 **Rate it**: Leave a [rating on the Marketplace](https://marketplace.visualstudio.com/items?itemName=NabiKAZ.vscode-copilot-rtl).
 - 💎 **Donate**:
    - **USDT (TRC20)**: `TEHjxGqu5Y2ExKBWzArBJEmrtzz3mgV5Hb`
    - **TON**: `nabikaz.ton`

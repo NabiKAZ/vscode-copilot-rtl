@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.2.1
+
+- Fixed the live-apply mechanism actually working: settings polling now uses
+  `fetch()` of a plain JSON file instead of a dynamically-created `<script>`
+  tag, which was silently blocked by workbench's Trusted Types policy.
+- Default `copilotRtl.lineHeight` changed from `1.8` to `1.6`.
+- Everything the extension places next to `workbench.html` (script, live
+  config, bundled font) now lives under one `vscode-copilot-rtl/` folder
+  instead of being scattered — the whole folder is removed on Disable.
+- Merged the `Re-apply Patch` command into `Enable`: Enable now always
+  strips any existing patch first, then re-applies fresh, so it covers both
+  a first install and repairing a patch a VS Code update reverted. One
+  clearly-named action instead of two overlapping ones.
+- `Enable`/`Disable` command titles now say "(requires reload)" so it's
+  clear upfront which actions need one and which (the live settings) don't.
+
 ## 2.2.0
 
 - These four settings apply **live** — no window reload needed. The injected

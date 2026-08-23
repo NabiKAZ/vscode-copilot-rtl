@@ -1,8 +1,8 @@
 {
-  "name": "copilot-rtl",
+  "name": "vscode-copilot-rtl",
   "displayName": "Copilot Chat RTL Support",
   "description": "Adds Right-to-Left (RTL) support and Vazirmatn font styling to the GitHub Copilot Chat panel, for Persian/Farsi, Arabic, Hebrew and other RTL languages.",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "publisher": "NabiKAZ",
   "license": "GPL-3.0-only",
   "engines": {
@@ -39,15 +39,11 @@
     "commands": [
       {
         "command": "copilotRtl.enable",
-        "title": "Copilot RTL: Enable"
+        "title": "Copilot RTL: Enable (requires reload)"
       },
       {
         "command": "copilotRtl.disable",
-        "title": "Copilot RTL: Disable"
-      },
-      {
-        "command": "copilotRtl.reapply",
-        "title": "Copilot RTL: Re-apply Patch (after a VS Code update)"
+        "title": "Copilot RTL: Disable (requires reload; run before uninstalling)"
       },
       {
         "command": "copilotRtl.openMenu",
@@ -86,7 +82,7 @@
         },
         "copilotRtl.lineHeight": {
           "type": "number",
-          "default": 1.8,
+          "default": 1.6,
           "minimum": 1,
           "maximum": 3,
           "description": "Line height (spacing between lines) used in the Copilot Chat area (applies live, no reload needed)."

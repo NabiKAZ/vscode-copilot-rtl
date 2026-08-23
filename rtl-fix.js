@@ -4,7 +4,7 @@
  * Code blocks and result editors remain LTR (Left-to-Right) for proper code display.
  *
  * Part 1: Chat area (rendered markdown + question carousel) -> forced direction/font via CSS,
- *         config polled live from copilot-rtl-config.js so settings changes apply without a reload.
+ *         config polled live from copilot-rtl-config.json so settings changes apply without a reload.
  * Part 2: Prompt input box (Monaco editor) -> per-line auto direction detection (RTL/LTR)
  *         based on the first non-space character of each line, independent of Part 1's setting.
  *
@@ -12,7 +12,7 @@
  * loaded as a normal extension script, so it has no access to the `vscode` API and
  * runs directly against the workbench DOM, exactly like pasting it into DevTools.
  *
- * @version 2.2.0
+ * @version 2.2.1
  * @author  NabiKAZ
  * @license GPLv3
  * @see https://github.com/NabiKAZ/vscode-copilot-rtl
@@ -28,8 +28,12 @@
     direction: 'rtl',
     fontFamily: 'Vazirmatn',
     fontSize: 13,
-    lineHeight: 1.8,
+    lineHeight: 1.6,
   };
+
+  // Everything this extension places next to workbench.html lives under one
+  // shared folder, for tidiness — see extension.js's ASSET_FOLDER_NAME.
+  const ASSET_FOLDER = './vscode-copilot-rtl';
 
   // Written by extension.js as plain JSON, refreshed instantly on every
   // settings change. Polled via fetch({cache:'no-store'}) — deliberately a
@@ -38,18 +42,18 @@
   // restriction, and its `trusted-types` directive only allow-lists VS
   // Code's own internal policy names (no custom policy can be registered).
   // fetch() isn't a Trusted Types sink at all, so it isn't affected.
-  const CONFIG_PATH = './copilot-rtl-config.json';
+  const CONFIG_PATH = `${ASSET_FOLDER}/copilot-rtl-config.json`;
   const CONFIG_POLL_INTERVAL_MS = 1000;
 
   // Fixed location extension.js copies the bundled fallback font to, next to
   // workbench.html. Used as a fallback only — see the @font-face rule below.
-  const BUNDLED_FONT_PATH = './copilot-rtl-assets/Vazirmatn-Variable.woff2';
+  const BUNDLED_FONT_PATH = `${ASSET_FOLDER}/Vazirmatn-Variable.woff2`;
 
   // Avoid double-injection if the workbench reloads without a full patch reapply
   if (window.__copilotRtlPatched) return;
   window.__copilotRtlPatched = true;
 
-  console.log('[copilot-rtl] script loaded');
+  console.log('[vscode-copilot-rtl] script loaded');
 
   // -----------------------------------------------------------------------
   // Part 1: Chat area — direction, font family, font size, line height.
