@@ -4,12 +4,12 @@ A Visual Studio Code extension that adds **Right-to-Left (RTL)** support to the 
 
 ## Features
 
-- Applies RTL (or LTR) direction to the Copilot Chat interface — switchable anytime
-- Custom font family and font size for the chat area
+- Applies RTL (or LTR) direction to the Copilot Chat interface — switchable anytime, **applies instantly, no reload**
+- Custom font family, font size, and line spacing for the chat area — also instant
 - Ships with the [Vazirmatn font](https://github.com/rastikerdar/vazirmatn) bundled, used automatically as a fallback if it isn't installed on your system
 - Preserves LTR direction for code blocks
 - Automatically detects RTL vs. LTR per line in the prompt input box
-- Quick-access menu in the status bar for direction, font, and size
+- Quick-access menu in the status bar for direction, font, size, and line spacing
 - Re-applies itself on startup, including after a VS Code update overwrites the patch
 
 ## Preview
@@ -39,7 +39,7 @@ That's it — no console, no manual steps after the first reload. The [Vazirmatn
 
 ## Status bar
 
-A small item (e.g. `⇄ RTL`) sits in the bottom-right status bar. Click it anytime to switch between RTL/LTR, or to change the font family or size — no need to dig through Settings.
+A small item (e.g. `⇄ RTL`) sits in the bottom-right status bar. Click it anytime to switch between RTL/LTR, or to change the font family, size, or line spacing — no need to dig through Settings, and no reload: changes show up within about a second.
 
 ## Settings
 
@@ -48,9 +48,10 @@ A small item (e.g. `⇄ RTL`) sits in the bottom-right status bar. Click it anyt
 | `copilotRtl.direction` | `rtl` | `rtl` or `ltr` — direction forced in the chat area (the prompt input box always auto-detects per line regardless) |
 | `copilotRtl.fontFamily` | `Vazirmatn` | Font used in the chat area; falls back to Vazirmatn (bundled) if not installed |
 | `copilotRtl.fontSize` | `13` | Font size in pixels used in the chat area |
+| `copilotRtl.lineHeight` | `1.8` | Line spacing (line height multiplier) used in the chat area |
 | `copilotRtl.autoEnable` | `true` | Automatically (re)apply the patch on startup |
 
-All of the above can also be changed from the status bar menu instead of the Settings UI.
+All of the above can also be changed from the status bar menu instead of the Settings UI. `direction`, `fontFamily`, `fontSize`, and `lineHeight` all apply live — no reload needed. Only `autoEnable`, and the Enable/Disable/Re-apply commands, need one (see [TECHNICAL.md](./TECHNICAL.md) for why).
 
 ## ⚠️ Uninstalling
 
@@ -73,7 +74,7 @@ If you already uninstalled without disabling first, see [TECHNICAL.md](./TECHNIC
 If you'd rather not install anything, you can still run the original script by hand:
 
 1. Open **Help > Toggle Developer Tools > Console**.
-2. Paste the contents of [`rtl-fix.js`](./rtl-fix.js) and press **Enter**. (Edit the `DIRECTION`, `FONT_FAMILY`, and `FONT_SIZE` constants near the top first if you want something other than the defaults.)
+2. Paste the contents of [`rtl-fix.js`](./rtl-fix.js) and press **Enter**. (Edit the `DEFAULT_CONFIG` object near the top first if you want something other than the defaults — there's no live settings menu outside the extension.)
 3. The effect is temporary and resets on reload — repeat whenever needed.
 
 ## To-Do & Improvements
@@ -84,6 +85,8 @@ If you'd rather not install anything, you can still run the original script by h
 - [x] Add a toggle to switch between RTL and LTR from the status bar
 - [x] Bundle the Vazirmatn font as an automatic fallback
 - [x] Custom font family and size
+- [x] Line spacing control
+- [x] Apply settings changes live, without a window reload
 
 ## For developers
 

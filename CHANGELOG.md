@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.0
+
+- These four settings apply **live** — no window reload needed. The injected
+  script polls a small config file the extension writes instantly on every
+  change, and re-renders its styles within about a second.
+- Adds `copilotRtl.lineHeight` settings; a status bar item opens a quick menu to
+  change any of them without going through Settings.
+
 ## 2.1.0
 
 - Adds `copilotRtl.direction`, `copilotRtl.fontFamily`, and `copilotRtl.fontSize`

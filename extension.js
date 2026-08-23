@@ -6,13 +6,16 @@
  * only our own marked block / checksum entry — so other extensions
  * patching the same files aren't affected. Full rationale: TECHNICAL.md.
  *
- * rtl-fix.js is a template: its DIRECTION/FONT_FAMILY/FONT_SIZE constants
- * are rewritten to match the copilotRtl.* settings every time it's synced
- * to disk (on activation and whenever those settings change), so updates
- * take effect after a reload alone — workbench.html itself only ever needs
- * patching once.
+ * rtl-fix.js itself never changes per-user: settings (direction, font,
+ * size, line height) are written as plain JSON to copilot-rtl-config.json
+ * next to workbench.html, which the already-running injected script polls
+ * every second via fetch() and applies live — no reload needed for settings
+ * changes. workbench.html/product.json are only touched by Enable/Disable/
+ * Reapply. (An earlier version polled a <script src> instead of fetching
+ * JSON, but that hit workbench's Trusted Types restriction on dynamically
+ * assigning a script's src — see TECHNICAL.md.)
  *
- * @version 2.1.0
+ * @version 2.2.0
  * @author  NabiKAZ
  * @license GPLv3
  * @see https://github.com/NabiKAZ/vscode-copilot-rtl
@@ -27,11 +30,12 @@ const path = require('path');
 const MARKER_START = '<!-- COPILOT-RTL-PATCH:START -->';
 const MARKER_END = '<!-- COPILOT-RTL-PATCH:END -->';
 const SCRIPT_FILE_NAME = 'copilot-rtl-fix.js';
+const CONFIG_FILE_NAME = 'copilot-rtl-config.json';
 const ASSETS_DIR_NAME = 'copilot-rtl-assets';
 const BUNDLED_FONT_FILE_NAME = 'Vazirmatn-Variable.woff2';
 
 const CONFIG_SECTION = 'copilotRtl';
-const CONFIG_KEYS = ['direction', 'fontFamily', 'fontSize'];
+const CONFIG_KEYS = ['direction', 'fontFamily', 'fontSize', 'lineHeight'];
 
 // Known relative locations of the workbench HTML across VS Code versions/variants.
 const WORKBENCH_HTML_CANDIDATES = [
@@ -96,32 +100,45 @@ function readConfig() {
     direction: cfg.get('direction', 'rtl'),
     fontFamily: cfg.get('fontFamily', 'Vazirmatn'),
     fontSize: cfg.get('fontSize', 13),
+    lineHeight: cfg.get('lineHeight', 1.8),
   };
-}
-
-/** Rewrite rtl-fix.js's DIRECTION/FONT_FAMILY/FONT_SIZE constants to match `config`. */
-function applyConfigToScript(source, config) {
-  return source
-    .replace(/const DIRECTION = '[^']*';/, `const DIRECTION = ${JSON.stringify(config.direction)};`)
-    .replace(/const FONT_FAMILY = '[^']*';/, `const FONT_FAMILY = ${JSON.stringify(config.fontFamily)};`)
-    .replace(/const FONT_SIZE = \d+;/, `const FONT_SIZE = ${JSON.stringify(config.fontSize)};`);
 }
 
 // ---------------------------------------------------------------------------
 // Patching workbench.html / product.json / synced assets
 // ---------------------------------------------------------------------------
 
-/** Write the current settings into a fresh copy of rtl-fix.js, next to workbench.html. */
-function syncScriptFile(context, htmlPath, config) {
+/** Copy rtl-fix.js next to workbench.html. Its content is static/generic —
+ *  settings live in the separate JSON config file it polls (see writeConfigFile). */
+function syncScriptFile(context, htmlPath) {
   const scriptDest = path.join(path.dirname(htmlPath), SCRIPT_FILE_NAME);
-  const template = readFile(path.join(context.extensionPath, 'rtl-fix.js'));
-  writeFile(scriptDest, applyConfigToScript(template, config));
+  fs.copyFileSync(path.join(context.extensionPath, 'rtl-fix.js'), scriptDest);
   return scriptDest;
 }
 
 function removeScriptFile(htmlPath) {
   const scriptDest = path.join(path.dirname(htmlPath), SCRIPT_FILE_NAME);
   if (fs.existsSync(scriptDest)) fs.unlinkSync(scriptDest);
+}
+
+/**
+ * Write the live-polled config as plain JSON next to workbench.html. The
+ * already running injected script (rtl-fix.js) fetches this ~every second
+ * and applies it immediately — this is what makes settings changes take
+ * effect without a window reload. Plain JSON (not a .js file) deliberately:
+ * fetching data isn't a Trusted Types sink, whereas assigning a dynamically
+ * created <script>'s src is, and workbench's `trusted-types` CSP directive
+ * only allow-lists VS Code's own internal policy names.
+ */
+function writeConfigFile(htmlPath, config) {
+  const dest = path.join(path.dirname(htmlPath), CONFIG_FILE_NAME);
+  writeFile(dest, JSON.stringify(config));
+  return dest;
+}
+
+function removeConfigFile(htmlPath) {
+  const dest = path.join(path.dirname(htmlPath), CONFIG_FILE_NAME);
+  if (fs.existsSync(dest)) fs.unlinkSync(dest);
 }
 
 /** Copy the bundled fallback font next to workbench.html, once. */
@@ -210,15 +227,14 @@ function locateWorkbench() {
 }
 
 /**
- * Refresh the external script + bundled font next to workbench.html to
- * match current settings. Independent of whether workbench.html itself
- * needs (re)patching — this is what lets settings changes take effect with
- * just a reload, never touching workbench.html again.
+ * Refresh the external script + bundled font + live config next to
+ * workbench.html to match current settings. Independent of whether
+ * workbench.html itself needs (re)patching.
  */
 function syncAssets(context, htmlPath) {
-  const config = readConfig();
-  syncScriptFile(context, htmlPath, config);
+  syncScriptFile(context, htmlPath);
   syncFontFile(context, htmlPath);
+  writeConfigFile(htmlPath, readConfig());
 }
 
 function applyPatch(context) {
@@ -268,6 +284,7 @@ function removePatch() {
 
   removeScriptFile(htmlPath);
   removeFontFile(htmlPath);
+  removeConfigFile(htmlPath);
   restoreProductJsonChecksum(appRoot, relHtml);
 
   return removedCount > 0;
@@ -309,7 +326,7 @@ function updateStatusBarItem() {
   if (!statusBarItem) return;
   const config = readConfig();
   statusBarItem.text = `$(arrow-swap) ${config.direction.toUpperCase()}`;
-  statusBarItem.tooltip = `Copilot RTL — direction: ${config.direction}, font: ${config.fontFamily} ${config.fontSize}px (click for options)`;
+  statusBarItem.tooltip = `Copilot RTL — direction: ${config.direction}, font: ${config.fontFamily} ${config.fontSize}px, line height: ${config.lineHeight} (click for options)`;
 }
 
 function createStatusBarItem() {
@@ -346,6 +363,11 @@ async function openMenu() {
       label: '$(text-size) Change font size…',
       description: `${config.fontSize}px`,
     },
+    {
+      action: 'line-height',
+      label: '$(whitespace) Change line spacing…',
+      description: `${config.lineHeight}`,
+    },
     { action: 'reapply', label: '$(sync) Re-apply patch', description: 'Useful after a VS Code update' },
     { action: 'disable', label: '$(circle-slash) Disable Copilot RTL' },
   ];
@@ -377,6 +399,16 @@ async function openMenu() {
         validateInput: (v) => (/^\d+$/.test(v) && Number(v) > 0 ? undefined : 'Enter a positive whole number'),
       });
       if (input) await cfg.update('fontSize', Number(input), vscode.ConfigurationTarget.Global);
+      break;
+    }
+    case 'line-height': {
+      const input = await vscode.window.showInputBox({
+        title: 'Copilot RTL — Line Spacing',
+        prompt: 'Line height multiplier (e.g. 1.8 ≈ default, 1 = tight, 2.5 = airy)',
+        value: String(config.lineHeight),
+        validateInput: (v) => (/^\d+(\.\d+)?$/.test(v) && Number(v) > 0 ? undefined : 'Enter a positive number'),
+      });
+      if (input) await cfg.update('lineHeight', Number(input), vscode.ConfigurationTarget.Global);
       break;
     }
     case 'reapply':
@@ -438,9 +470,11 @@ function activate(context) {
         if (!CONFIG_KEYS.some((key) => e.affectsConfiguration(`${CONFIG_SECTION}.${key}`))) return;
 
         updateStatusBarItem();
+        // Direction/font/size/line-height are picked up live by the already
+        // running injected script (polled ~every second) — no reload needed.
         const { htmlPath } = locateWorkbench();
-        syncAssets(context, htmlPath);
-        await offerReload('Copilot RTL settings updated. Reload the window to see the change.');
+        writeConfigFile(htmlPath, readConfig());
+        vscode.window.setStatusBarMessage('$(check) Copilot RTL settings applied', 2000);
       })
     )
   );

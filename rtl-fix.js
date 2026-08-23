@@ -1,9 +1,10 @@
 /**
  * This script modifies the styling of various elements in a web page to support RTL (Right-to-Left) text direction.
- * It applies a configurable direction, font family, and font size to the chat area.
+ * It applies a configurable direction, font family, font size, and line height to the chat area.
  * Code blocks and result editors remain LTR (Left-to-Right) for proper code display.
  *
- * Part 1: Chat area (rendered markdown + question carousel) -> forced direction/font via CSS.
+ * Part 1: Chat area (rendered markdown + question carousel) -> forced direction/font via CSS,
+ *         config polled live from copilot-rtl-config.js so settings changes apply without a reload.
  * Part 2: Prompt input box (Monaco editor) -> per-line auto direction detection (RTL/LTR)
  *         based on the first non-space character of each line, independent of Part 1's setting.
  *
@@ -11,11 +12,7 @@
  * loaded as a normal extension script, so it has no access to the `vscode` API and
  * runs directly against the workbench DOM, exactly like pasting it into DevTools.
  *
- * The three constants below are rewritten by extension.js to match the user's
- * `copilotRtl.*` settings every time it syncs this file. Pasted standalone (see
- * README's "Manual usage" section) they simply keep these defaults.
- *
- * @version 2.1.0
+ * @version 2.2.0
  * @author  NabiKAZ
  * @license GPLv3
  * @see https://github.com/NabiKAZ/vscode-copilot-rtl
@@ -24,10 +21,25 @@
 (function () {
   'use strict';
 
-  // Rewritten by extension.js to match copilotRtl.direction / fontFamily / fontSize.
-  const DIRECTION = 'rtl';
-  const FONT_FAMILY = 'Vazirmatn';
-  const FONT_SIZE = 13;
+  // Used standalone (pasted into DevTools, see README) and as the starting
+  // point before the first live config update arrives when run by the
+  // extension. Edit these directly for standalone use.
+  const DEFAULT_CONFIG = {
+    direction: 'rtl',
+    fontFamily: 'Vazirmatn',
+    fontSize: 13,
+    lineHeight: 1.8,
+  };
+
+  // Written by extension.js as plain JSON, refreshed instantly on every
+  // settings change. Polled via fetch({cache:'no-store'}) — deliberately a
+  // *data* fetch, not a <script> load: dynamically assigning a script's src
+  // hits workbench's Trusted Types `require-trusted-types-for 'script'`
+  // restriction, and its `trusted-types` directive only allow-lists VS
+  // Code's own internal policy names (no custom policy can be registered).
+  // fetch() isn't a Trusted Types sink at all, so it isn't affected.
+  const CONFIG_PATH = './copilot-rtl-config.json';
+  const CONFIG_POLL_INTERVAL_MS = 1000;
 
   // Fixed location extension.js copies the bundled fallback font to, next to
   // workbench.html. Used as a fallback only — see the @font-face rule below.
@@ -37,41 +49,77 @@
   if (window.__copilotRtlPatched) return;
   window.__copilotRtlPatched = true;
 
-  // Log once so it's easy to confirm the script actually ran (visible in
-  // Help > Toggle Developer Tools > Console).
-  console.log('[copilot-rtl] script loaded', { DIRECTION, FONT_FAMILY, FONT_SIZE });
+  console.log('[copilot-rtl] script loaded');
 
-  // Small helper to inject a <style> tag into <head>
-  function injectStyle(css) {
-    const style = document.createElement('style');
-    style.textContent = css;
-    document.head.appendChild(style);
-    return style;
+  // -----------------------------------------------------------------------
+  // Part 1: Chat area — direction, font family, font size, line height.
+  // Re-rendered live whenever a new config is polled in, no reload needed.
+  // -----------------------------------------------------------------------
+  function buildChatAreaCss(config) {
+    return `
+      /* Fallback so "Vazirmatn" still renders even when it isn't installed
+         on the system: local() checks the system font first, url() is the
+         copy bundled with the extension (unused for the DevTools/manual
+         path, where the relative asset simply won't exist and this rule is
+         skipped). */
+      @font-face {
+        font-family: 'Vazirmatn';
+        src: local('Vazirmatn'), local('Vazirmatn Variable'), url('${BUNDLED_FONT_PATH}') format('woff2');
+        font-weight: 100 900;
+        font-display: swap;
+      }
+
+      /* COPILOT RTL PATCH */
+      .rendered-markdown > *:not(div),
+      .chat-question-carousel-widget-container {
+        direction: ${config.direction} !important;
+        font-family: "${config.fontFamily}", 'Vazirmatn', sans-serif !important;
+        font-size: ${config.fontSize}px !important;
+        line-height: ${config.lineHeight} !important;
+      }
+    `;
   }
 
-  // -----------------------------------------------------------------------
-  // Part 1: Chat area — force direction, font family, and font size
-  // -----------------------------------------------------------------------
-  injectStyle(`
-    /* Fallback so "Vazirmatn" still renders even when it isn't installed
-       on the system: local() checks the system font first, url() is the
-       copy bundled with the extension (unused for the DevTools/manual path,
-       where the relative asset simply won't exist and this rule is skipped). */
-    @font-face {
-      font-family: 'Vazirmatn';
-      src: local('Vazirmatn'), local('Vazirmatn Variable'), url('${BUNDLED_FONT_PATH}') format('woff2');
-      font-weight: 100 900;
-      font-display: swap;
-    }
+  const chatAreaStyle = document.createElement('style');
+  document.head.appendChild(chatAreaStyle);
 
-    /* COPILOT RTL PATCH */
-    .rendered-markdown > *:not(div),
-    .chat-question-carousel-widget-container {
-      direction: ${DIRECTION} !important;
-      font-family: "${FONT_FAMILY}", 'Vazirmatn', sans-serif !important;
-      font-size: ${FONT_SIZE}px !important;
+  let currentConfig = { ...DEFAULT_CONFIG };
+
+  function renderChatArea(config) {
+    chatAreaStyle.textContent = buildChatAreaCss(config);
+  }
+  renderChatArea(currentConfig);
+
+  // --- live config polling (fetch, not script injection — see note above) -
+  let pollFailureLogged = false;
+  async function pollConfig() {
+    try {
+      const res = await fetch(CONFIG_PATH, { cache: 'no-store' });
+      if (!res.ok) return; // e.g. 404 before the extension has written it yet
+      const incoming = await res.json();
+      const merged = { ...DEFAULT_CONFIG, ...incoming };
+      if (JSON.stringify(merged) === JSON.stringify(currentConfig)) return; // no change
+      currentConfig = merged;
+      renderChatArea(currentConfig);
+      console.log('[copilot-rtl] config updated', currentConfig);
+    } catch (err) {
+      // A missing config file (e.g. standalone DevTools use, or before the
+      // extension has written one yet) is expected and harmless — but log
+      // it once so a genuine failure (e.g. blocked by CSP) is visible in
+      // the console instead of silently never applying settings changes.
+      if (!pollFailureLogged) {
+        pollFailureLogged = true;
+        console.warn(
+          `[copilot-rtl] could not load ${CONFIG_PATH} — settings changes won't apply live. ` +
+            'This is expected if you pasted this script manually (no extension running). ' +
+            'If the extension is installed, this may indicate a real problem (e.g. CSP blocking the request).',
+          err
+        );
+      }
     }
-  `);
+  }
+  pollConfig();
+  setInterval(pollConfig, CONFIG_POLL_INTERVAL_MS);
 
   // -----------------------------------------------------------------------
   // Part 2: Prompt input box — auto-detect direction per line (RTL/LTR)
@@ -80,12 +128,14 @@
   const EDITOR_CONTAINER_SELECTOR = '.chat-editor-container';
   const LINE_SELECTOR = '.view-line';
 
-  injectStyle(`
+  const editorTransitionStyle = document.createElement('style');
+  editorTransitionStyle.textContent = `
     ${EDITOR_CONTAINER_SELECTOR} .monaco-editor .view-lines,
     ${EDITOR_CONTAINER_SELECTOR} .monaco-editor .view-line {
       transition: all 0.1s ease-in-out;
     }
-  `);
+  `;
+  document.head.appendChild(editorTransitionStyle);
 
   function applyLineDirection(line) {
     const text = line.innerText?.trimStart() || '';
