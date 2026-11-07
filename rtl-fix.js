@@ -19,7 +19,7 @@
  * loaded as a normal extension script, so it has no access to the `vscode` API and
  * runs directly against the workbench DOM, exactly like pasting it into DevTools.
  *
- * @version 2.4.0
+ * @version 2.4.1
  * @author  NabiKAZ
  * @license GPLv3
  * @see https://github.com/NabiKAZ/vscode-copilot-rtl

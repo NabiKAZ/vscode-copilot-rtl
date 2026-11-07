@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.4.0
+## 2.4.1
 
 - **Tables now get RTL treatment too.** A `<table>` whose first strong
   character is RTL (e.g. a Persian header row) lays out as a whole

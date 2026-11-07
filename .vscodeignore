@@ -9,3 +9,4 @@ node_modules/**
 backup/**
 docs/**
 *.vsix
+rtl-fix copy - fixing rtl inputbox working.js
