@@ -6,8 +6,8 @@
  * Part 1: Chat area (rendered markdown + question carousel) -> direction/font via CSS,
  *         config polled live from copilot-rtl-config.json so settings changes apply without a reload.
  *         `direction: 'auto'` resolves direction per rendered block (paragraph, list item,
- *         heading, table cell…) from that block's own text, so a bilingual conversation
- *         reads correctly: Persian answers RTL, English answers LTR.
+ *         heading, table cell, whole table…) from that block's own text, so a bilingual
+ *         conversation reads correctly: Persian answers RTL, English answers LTR.
  * Part 2: Prompt input box (Monaco editor) -> per-line auto direction detection (RTL/LTR),
  *         independent of Part 1's setting.
  *
@@ -19,7 +19,7 @@
  * loaded as a normal extension script, so it has no access to the `vscode` API and
  * runs directly against the workbench DOM, exactly like pasting it into DevTools.
  *
- * @version 2.3.0
+ * @version 2.4.0
  * @author  NabiKAZ
  * @license GPLv3
  * @see https://github.com/NabiKAZ/vscode-copilot-rtl
@@ -100,6 +100,17 @@
     const directionRule =
       config.direction === 'auto' ? '' : `direction: ${config.direction} !important;`;
 
+    // Forced mode also pins the table box to the matching side: direction
+    // alone flips the column order but a shrink-to-fit table can keep hugging
+    // the left edge of its scroll container. In auto mode the observer sets
+    // direction/text-align/margins inline per table instead.
+    const tableAlignRule =
+      config.direction === 'rtl'
+        ? 'text-align: right !important; margin-right: 0 !important; margin-left: auto !important;'
+        : config.direction === 'ltr'
+          ? 'text-align: left !important; margin-left: 0 !important; margin-right: auto !important;'
+          : '';
+
     return `
       /* Fallback so "Vazirmatn" still renders even when it isn't installed
          on the system: local() checks the system font first, url() is the
@@ -121,6 +132,19 @@
         font-size: ${config.fontSize}px !important;
         line-height: ${config.lineHeight} !important;
       }
+
+      /* Tables render nested inside a Monaco scrollable wrapper div, which
+         the "> *:not(div)" rule above deliberately skips — without this
+         they'd keep the default font and, in forced mode, the default LTR
+         direction and left box position. The wrapper itself is deliberately
+         left LTR: flipping it would desync Monaco's scroll math. */
+      .rendered-markdown table {
+        ${directionRule}
+        ${tableAlignRule}
+        font-family: "${config.fontFamily}", 'Vazirmatn', sans-serif !important;
+        font-size: ${config.fontSize}px !important;
+        line-height: ${config.lineHeight} !important;
+      }
     `;
   }
 
@@ -138,7 +162,13 @@
 
   // Block-level markdown elements worth aligning individually. `pre` (and
   // anything inside it) is deliberately absent: code always stays LTR.
-  const AUTO_BLOCK_SELECTOR = [
+  // `table` is included so a table whose *first* cell is RTL (e.g. a Persian
+  // header row) lays out as a whole right-to-left — column order right-to-left,
+  // borders on the correct side — while each cell still gets its own direction
+  // from the per-cell rules below. The Monaco scrollable wrapper around the
+  // table is deliberately NOT aligned: it stays LTR so Monaco's scroll math
+  // is untouched; the table is moved to the matching edge with margins.
+  const AUTO_BLOCK_TAGS = [
     'p',
     'li',
     'h1',
@@ -148,14 +178,17 @@
     'h5',
     'h6',
     'blockquote',
+    'table',
     'th',
     'td',
     'dt',
     'dd',
     'summary',
-  ]
-    .map((tag) => `.rendered-markdown ${tag}, .chat-question-carousel-widget-container ${tag}`)
-    .join(', ');
+  ];
+
+  const AUTO_BLOCK_SELECTOR = AUTO_BLOCK_TAGS.map(
+    (tag) => `.rendered-markdown ${tag}, .chat-question-carousel-widget-container ${tag}`
+  ).join(', ');
 
   const AUTO_MARKER_ATTRIBUTE = 'data-copilot-rtl-auto';
   const AUTO_SKIP_SELECTOR = 'pre, code, .monaco-editor, .interactive-result-editor';
@@ -170,6 +203,13 @@
     el.setAttribute(AUTO_MARKER_ATTRIBUTE, dir);
     el.style.direction = dir;
     el.style.textAlign = dir === 'rtl' ? 'right' : 'left';
+
+    // A table box is shrink-to-fit, so direction alone doesn't move it —
+    // pin it to the matching edge of its (LTR) scroll container.
+    if (el.tagName === 'TABLE') {
+      el.style.marginLeft = dir === 'rtl' ? 'auto' : '';
+      el.style.marginRight = dir === 'rtl' ? '0' : '';
+    }
   }
 
   function clearBlockDirections() {
@@ -177,6 +217,8 @@
       el.removeAttribute(AUTO_MARKER_ATTRIBUTE);
       el.style.direction = '';
       el.style.textAlign = '';
+      el.style.marginLeft = '';
+      el.style.marginRight = '';
     });
   }
 
@@ -211,6 +253,11 @@
     requestAnimationFrame(sweepAutoDirection);
   }
 
+  // A table's own direction decides column order, but tables stream in empty
+  // and then fill cell by cell — mutations whose target is inside a cell
+  // never name the table as an ancestor target, so without pulling it in
+  // explicitly the table's direction would be decided once, from an empty
+  // table, and never revisited.
   function queueAutoDirection(mutations) {
     for (const mutation of mutations) {
       // characterData mutations report the text node itself; walk up to an element.
@@ -218,7 +265,11 @@
         mutation.target.nodeType === Node.ELEMENT_NODE
           ? mutation.target
           : mutation.target.parentElement;
-      if (target) autoDirectionPendingRoots.add(target);
+      if (!target) continue;
+      autoDirectionPendingRoots.add(target);
+
+      const table = target.closest('table');
+      if (table) autoDirectionPendingRoots.add(table);
     }
     scheduleAutoDirectionSweep();
   }

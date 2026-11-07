@@ -2,7 +2,7 @@
   "name": "vscode-copilot-rtl",
   "displayName": "Copilot Chat RTL Support",
   "description": "Adds Right-to-Left (RTL) support and Vazirmatn font styling to the GitHub Copilot Chat panel, for Persian/Farsi, Arabic, Hebrew and other RTL languages.",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "publisher": "NabiKAZ",
   "license": "GPL-3.0-only",
   "engines": {

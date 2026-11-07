@@ -1,5 +1,32 @@
 # Changelog
 
+## 2.4.0
+
+- **Tables now get RTL treatment too.** A `<table>` whose first strong
+  character is RTL (e.g. a Persian header row) lays out as a whole
+  right-to-left — column order flips, borders land on the correct side —
+  while each cell still resolves its own direction from its own text, so a
+  mixed Persian/English table reads correctly cell by cell. Tables with no
+  directional signal are left untouched.
+- **Tables are covered by the font/size/line-height rule as well.** Copilot
+  nests tables inside wrapper `div`s that the main chat-area rule
+  (`> *:not(div)`) deliberately skips, so tables get their own explicit
+  selector.
+- **Tables stream in empty and fill cell by cell**, and cell-level mutations
+  never name the table as a mutation target — cell mutations now re-queue the
+  enclosing table for re-evaluation, so its direction is decided from real
+  content instead of its empty state.
+- **Tables sit on the correct side.** `direction` alone flips the column
+  order but doesn't move a shrink-to-fit table box inside its scroll
+  container: forced RTL pins the table to the right edge
+  (`margin-right: 0; margin-left: auto`), forced LTR to the left, and auto
+  mode does the same inline per table. The Monaco scrollable wrapper around
+  the table is deliberately left LTR so Monaco's scroll math isn't desynced.
+- The Monaco scrollable wrapper Copilot renders tables inside
+  (`.rendered-markdown-table-scroll-wrapper`) is aligned with the configured
+  direction as well, so an RTL table hugs the RTL text edge instead of
+  overflowing to the right of the paragraph.
+
 ## 2.3.0
 
 - **New `auto` direction mode, now the default.** Instead of forcing one

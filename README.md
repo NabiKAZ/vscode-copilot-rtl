@@ -4,7 +4,7 @@ A Visual Studio Code extension that adds **Right-to-Left (RTL)** support to the 
 
 ## Features
 
-- **Automatic direction per paragraph** — each paragraph, list item, heading and table cell gets its own RTL/LTR direction based on its text, so a mixed Persian/English conversation reads correctly (default)
+- **Automatic direction per paragraph** — each paragraph, list item, heading, table and table cell gets its own RTL/LTR direction based on its text, so a mixed Persian/English conversation reads correctly (default)
 - Or force RTL/LTR for the whole chat area — switchable anytime, **applies instantly, no reload**
 - <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd> cycles auto → RTL → LTR
 - Custom font family, font size, and line spacing for the chat area — also instant, with a picker listing the fonts installed on your system
@@ -48,7 +48,7 @@ A small item (e.g. `⇄ AUTO`, `← RTL`) sits in the bottom-right status bar. C
 
 | Setting | Default | Description |
 |---|---|---|
-| `copilotRtl.direction` | `auto` | `auto` (detect per paragraph/list item/heading), `rtl`, or `ltr` — direction used in the chat area (the prompt input box always auto-detects per line regardless) |
+| `copilotRtl.direction` | `auto` | `auto` (detect per paragraph/list item/heading/table), `rtl`, or `ltr` — direction used in the chat area (the prompt input box always auto-detects per line regardless) |
 | `copilotRtl.fontFamily` | `Vazirmatn` | Font used in the chat area; falls back to Vazirmatn (bundled) if not installed |
 | `copilotRtl.fontSize` | `13` | Font size in pixels used in the chat area |
 | `copilotRtl.lineHeight` | `1.6` | Line spacing (line height multiplier) used in the chat area |

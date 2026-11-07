@@ -25,7 +25,7 @@
  * also the right thing to run after a VS Code update reverts the patch —
  * one clearly-named action instead of two overlapping ones.
  *
- * @version 2.3.0
+ * @version 2.4.0
  * @author  NabiKAZ
  * @license GPLv3
  * @see https://github.com/NabiKAZ/vscode-copilot-rtl
